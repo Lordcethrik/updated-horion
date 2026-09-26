@@ -1,6 +1,6 @@
 // This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
 //@version=6
-indicator("NY Open VWAP Strategy Indicator", "NY VWAP Strat", overlay = true, max_boxes_count = 500, max_labels_count = 500, max_lines_count = 500)
+indicator("NY Open VWAP Strategy Indicator", "NY VWAP", overlay = true, max_boxes_count = 500, max_labels_count = 500, max_lines_count = 500)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Concept
@@ -97,9 +97,8 @@ f_core() =>
         orL   := low
     int  orEndT = na(openT) ? na : openT + orMins * 60000
     bool inOR   = inNY and not na(orEndT) and time < orEndT
-    if inOR and not nyStart
-        orH := math.max(orH, high)
-        orL := math.min(orL, low)
+    orH := inOR and not nyStart ? math.max(orH, high) : orH
+    orL := inOR and not nyStart ? math.min(orL, low) : orL
     bool orDone = inNY and not na(orEndT) and time >= orEndT
 
     [inNY, nyStart, nyVwap, onVwap, pdVwap, orH, orL, inOR, orDone, openT]
