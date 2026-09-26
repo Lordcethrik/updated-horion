@@ -1,0 +1,21 @@
+//@version=6
+indicator("NY 9:30 Anchored VWAP", "NY VWAP", overlay = true)
+
+// Inputs
+sess     = input.session("0930-1600", "NY Session (ET)")
+extend   = input.bool(false, "Keep line after 4:00 PM")
+lineCol  = input.color(color.new(#5B9CF6, 0), "Color")
+lineW    = input.int(2, "Width", minval = 1, maxval = 4)
+
+// Session detection (New York time)
+inSess    = not na(time(timeframe.period, sess, "America/New_York"))
+sessStart = inSess and not inSess[1]
+
+// VWAP that resets at 9:30 ET each day
+var bool started = false
+if sessStart
+    started := true
+vwapVal = ta.vwap(hlc3, sessStart)
+
+showLine = started and (inSess or extend)
+plot(showLine ? vwapVal : na, "NY VWAP", lineCol, lineW, plot.style_linebr)
