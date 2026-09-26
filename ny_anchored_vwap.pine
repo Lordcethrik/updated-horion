@@ -1,17 +1,31 @@
 //@version=6
 indicator("NY 9:30 Anchored VWAP", "NY VWAP", overlay = true)
 
-// Inputs
-sess     = input.session("0930-1600", "NY Session (ET)")
-extend   = input.bool(false, "Keep line after 4:00 PM")
-lineCol  = input.color(color.new(#5B9CF6, 0), "Color")
-lineW    = input.int(2, "Width", minval = 1, maxval = 4)
+// ── VWAP inputs
+grpV    = "VWAP"
+sess    = input.session("0930-1600", "NY Session (ET)", group = grpV)
+extend  = input.bool(false, "Keep line after 4:00 PM", group = grpV)
+lineCol = input.color(color.new(#5B9CF6, 0), "Color", group = grpV)
+lineW   = input.int(2, "Width", minval = 1, maxval = 4, group = grpV)
 
-// Session detection (New York time)
+// ── Signal inputs
+grpS       = "Signals"
+showSig    = input.bool(true, "Show Buy / Sell Signals", group = grpS)
+waitMins   = input.int(30, "Wait After Open (min)", options = [15, 30], group = grpS)
+shadeWait  = input.bool(true, "Shade Wait Period", group = grpS)
+slopeLen   = input.int(10, "Trend Lookback (bars)", minval = 1, group = grpS, tooltip = "Uptrend = VWAP rising over this many bars. Downtrend = VWAP falling.")
+touchTicks = input.int(4, "VWAP Touch Tolerance (ticks)", minval = 0, group = grpS, tooltip = "How close price must get to the VWAP to count as a pullback touch.")
+minAway    = input.int(3, "Bars Away From VWAP Before Pullback", minval = 1, group = grpS, tooltip = "Price must stay fully on one side of the VWAP for this many bars before the pullback.")
+needCandle = input.bool(true, "Require Rejection Candle", group = grpS, tooltip = "Buy needs a green candle, sell needs a red candle.")
+maxSig     = input.int(2, "Max Signals Per Day", minval = 1, group = grpS)
+buyCol     = input.color(#26A69A, "Buy Color", group = grpS)
+sellCol    = input.color(#EF5350, "Sell Color", group = grpS)
+
+// ── Session detection (New York time, handles EST/EDT automatically)
 inSess    = not na(time(timeframe.period, sess, "America/New_York"))
 sessStart = inSess and not inSess[1]
 
-// VWAP that resets at 9:30 ET each day
+// ── VWAP that resets at 9:30 ET each day
 var bool started = false
 if sessStart
     started := true
@@ -19,3 +33,39 @@ vwapVal = ta.vwap(hlc3, sessStart)
 
 showLine = started and (inSess or extend)
 plot(showLine ? vwapVal : na, "NY VWAP", lineCol, lineW, plot.style_linebr)
+
+// ── Wait period (first 15 / 30 minutes after the open)
+var int openT    = na
+var int sigCount = 0
+if sessStart
+    openT    := time
+    sigCount := 0
+inWait    = inSess and not na(openT) and time < openT + waitMins * 60000
+afterWait = inSess and not na(openT) and time >= openT + waitMins * 60000
+bgcolor(shadeWait and inWait ? color.new(lineCol, 90) : na, title = "Wait Period")
+
+// ── Trend: direction of the VWAP since the open
+barsIn  = nz(ta.barssince(sessStart), 0)
+lb      = math.min(slopeLen, barsIn)
+trendUp = vwapVal > vwapVal[lb]
+trendDn = vwapVal < vwapVal[lb]
+
+// ── Pullback into the VWAP after price has been away from it
+tol      = touchTicks * syminfo.mintick
+wasAbove = math.sum(low > vwapVal + tol ? 1 : 0, minAway)[1] == minAway
+wasBelow = math.sum(high < vwapVal - tol ? 1 : 0, minAway)[1] == minAway
+
+// BUY: uptrend, price pulls back to the VWAP and closes back above it
+buySig = afterWait and sigCount < maxSig and barstate.isconfirmed and trendUp and wasAbove and low <= vwapVal + tol and close > vwapVal and (not needCandle or close > open)
+
+// SELL: downtrend, price rallies to the VWAP and closes back below it
+sellSig = afterWait and sigCount < maxSig and barstate.isconfirmed and trendDn and wasBelow and high >= vwapVal - tol and close < vwapVal and (not needCandle or close < open)
+
+if buySig or sellSig
+    sigCount += 1
+
+plotshape(showSig and buySig, "Buy", shape.labelup, location.belowbar, buyCol, text = "BUY", textcolor = color.white, size = size.small)
+plotshape(showSig and sellSig, "Sell", shape.labeldown, location.abovebar, sellCol, text = "SELL", textcolor = color.white, size = size.small)
+
+alertcondition(buySig, "NY VWAP Buy", "NY VWAP BUY on {{ticker}} @ {{close}}")
+alertcondition(sellSig, "NY VWAP Sell", "NY VWAP SELL on {{ticker}} @ {{close}}")
