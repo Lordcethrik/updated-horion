@@ -1,6 +1,6 @@
 // This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
 //@version=6
-indicator("NY Open VWAP Strategy Indicator", "NY VWAP", overlay = true, max_boxes_count = 500, max_labels_count = 500, max_lines_count = 500)
+indicator("NY Open VWAP Strategy Indicator", "NY VWAP", overlay = true, scale = scale.right, max_boxes_count = 500, max_labels_count = 500, max_lines_count = 500)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Concept
@@ -111,8 +111,10 @@ f_state() =>
     int sNy = f_side(_ny)
     int sOn = f_side(_on)
     int sPd = f_side(_pd)
-    int sOr = not _orDone ? 0 : close > _orH ? 1 : close < _orL ? -1 : 0
-    [sNy, sOn, sPd, sOr, _orDone]
+    // OR status persists after the session closes (until the next 09:30 open)
+    bool orComplete = not na(_openT) and time >= _openT + orMins * 60000
+    int sOr = not orComplete ? 0 : close > _orH ? 1 : close < _orL ? -1 : 0
+    [sNy, sOn, sPd, sOr, orComplete]
 
 f_trendTxt(int score) =>
     score >= 3 ? "Strong Up" : score >= 1 ? "Up" : score <= -3 ? "Strong Down" : score <= -1 ? "Down" : "Neutral"
